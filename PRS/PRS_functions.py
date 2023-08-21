@@ -287,19 +287,62 @@ def postrun_geneburdenpipeline(inputFile, RVoutputFile):
        #     newWithGene = line.replace(withGene) 
 
 #run PRS.py -iPlink "naenae" -iPRS "amp-pdPRS.all_score" -p "naenae" -c "AMP-PD_2021_PDCC_Clean_Pheno_COVs_bbustos.wSITE.txt" -iVCF "naenae.vcf.gz" --covar-name "naenae,booboo" 300 600
-def laterfunction(vcfFile, outPrefix):
-    headRemove_formatting = open(vcfFile+"_headRemove.sh", 'w')
-    annotation = open(vcfFile+"_cadAnno.sh", 'w')
-    wrapper = open(vcfFile+"_annotationWrapper.sh", 'w')
-    sbatchWritingBlank(headRemove_formatting)
-    headRemove_formatting.write(
-        "module load bcftools \n"
-        "\n"
-        "bcftools view --no-header " + vcfFile + " -Oz -o "+outPrefix+"_noHeader.vcf.gz"
-        "awk '{print "
-    )
+
+def zPlotting(input_prs,covariateFile):
+    """takes .best (PRSice) input and covariate file, ensure phenotype column is labeled PHENO, creates Z-distribution plot"""
+    PRSdf = pandas.read_table(input_prs)
+    covariatedf_preprocess = pandas.read_table(covariateFile)
+
+    PRSdf.columns = PRSdf.columns.str.strip()
+
+    covardf1 = covariatedf_preprocess.sort_values('FID')
+    #sorted, ready to be pasted onto 
+    sorted_covardf = covardf1.reset_index(drop = True)
+
+    #for fixing data as pandas reads prsice data incorrectly
+    PRSdf[["FID","IID","toDrop","PRS"]] = PRSdf.iloc[:,0].str.split(' ', expand=True)
+    PRSdf = PRSdf.drop(columns = PRSdf.columns[0])
+
+    PRSdf.columns.values[0] = "IID"
+    PRSdf.columns.values[1] = "FID"
+    PRSdf.columns.values[3] = "PRS"
+
+    columns = ["FID","IID","PHENO","PRS"]
+
+    #creates df -> FID IID PHENO PRS for conversion to different lines
+    new_df = pandas.DataFrame({col: PRSdf[col] if col in PRSdf.columns else sorted_covardf[col] for col in columns})
+    
+    #cases
+
+    df_cases = new_df[new_df.PHENO == 2]
+    df_cases.to_csv('9_21_cases_covars_all.txt', sep='\t', index=False)
 
 
-    #headRemove
-for x in range(1,23):
-     os.system("")
+
+    #controls
+    df_controls = new_df[new_df.PHENO == 1]
+    df_controls.to_csv('9_21_controls_covars_all.txt', sep='\t', index=False)
+
+    #plotting
+
+    all_prs_scores = df_cases['PRS'].tolist() + df_controls['PRS'].tolist()
+    new_all = [float(x) for x in all_prs_scores]
+    num_ticks = 10  # Set the number of desired ticks
+    tick_positions = [min(new_all) + (i * (max(new_all) - min(new_all)) / num_ticks) for i in range(1, num_ticks + 1)]
+    print(tick_positions)
+    #tick_positions = np.linspace(min(new_all), max(new_all), num_ticks + 1)
+    #print(tick_positions)
+
+    tick_positions = [-0.00013,-.006]
+    plt.figure()
+    plt.hist([df_cases['PRS'], df_controls['PRS']], bins=20, alpha=0.5, label=['Cases', 'Controls'], color=['blue', 'green'])
+    plt.xticks([-.05, 0,.05],rotation='vertical')
+    plt.xlabel('PRS Score')
+    plt.ylabel('Frequency')
+    plt.title('Distribution of PRS Scores')
+    plt.legend()
+
+
+
+    plt.show()
+
