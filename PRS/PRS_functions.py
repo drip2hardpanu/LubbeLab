@@ -96,7 +96,7 @@ def commandLineVCFtoPlink(vcfFile, CovariateFile):
     index_sex = covariatedf_head.index("SEX")
     os.system('awk '"'{print "'$1"\t"$2"\t"$'+str(index_sex+1)+"}' "+CovariateFile+"> "+prefix+"_sex.txt")
 
-    os.system("plink2 --bfile "+prefix+"_unUpdated --update-sex "+prefix+"_sex.txt --pheno "+prefix+"_pheno.txt --out "+prefix)
+    os.system("plink2 --bfile "+prefix+"_unUpdated --update-sex "+prefix+"_sex.txt --pheno "+prefix+"_pheno.txt --make-bed --out "+prefix)
     os.system("rm "+prefix+"_unUpdated*")
 
 def scriptVCFtoPlink(vcfFile, CovariateFile):
