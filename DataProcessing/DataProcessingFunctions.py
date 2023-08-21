@@ -155,7 +155,7 @@ def scriptVCFtoPlink(vcfFile, CovariateFile):
     script.write(
         "plink2 --vcf "+vcfFile+" --make-bed --out "+prefix+"_unUpdated"
         "\n"
-        "plink2 --bfile "+prefix+"_unUpdated --update-sex "+prefix+"_sex.txt --pheno "+prefix+"_pheno.txt --out "+prefix+
+        "plink2 --bfile "+prefix+"_unUpdated --update-sex "+prefix+"_sex.txt --pheno "+prefix+"_pheno.txt --make-bed --out "+prefix+
         "\n"
         "rm "+prefix+"_unUpdated*"
             )
