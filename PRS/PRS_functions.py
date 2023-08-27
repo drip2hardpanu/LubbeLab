@@ -173,7 +173,7 @@ def allLOFinclusion_pipeline(vcfFile, build, prefix, thresholdsList):
     annovarannotation = open(prefix+"_annovarAnno.sh", 'w')
     LOFextraction = open(prefix+"_LOFs.sh", 'w')
     wrapper = open(prefix+"_CADDwrapper.sh", 'w')
-    wrapper.write("!/bin/bash -e \n")
+    wrapper.write("#!/bin/bash -e \n")
 
     #creates a file + script for Chromosome Rename
     chr = open('rename_chromosomes.txt', 'w')
@@ -183,31 +183,31 @@ def allLOFinclusion_pipeline(vcfFile, build, prefix, thresholdsList):
     chr.close()
 
     rename_script = open("chromosomeRename.sh", 'w')
-    sbatchWritingMid(rename_script)
+    sbatchWritingMidLong(rename_script)
 
     rename_script.write(
          "\n"
          "module load bcftools \n"
-         "prefix="+vcfFile[:-7]
+         "prefix="+vcfFile[:-7]+"\n"
          "bcftools annotate --rename-chrs chromRename.txt -Oz -o $prefix.1.vcf.gz $prefix.vcf.gz\n"
          "bcftools index -t $prefix.1.vcf.gz\n"
+         "bcftools view --no-header $prefix.1.vcf.gz > $prefix-noheader.vcf.gz\n"
+         "awk '{print $1"'"\t"$2"\t"".""\t"$4"\t"$5'"}' $prefix-noheader.vcf.gz > forCADD.vcf"
     )
     newvcf = vcfFile[:-7]+".1.vcf.gz"
-##stopping here for right now, because i still need to wait for header thing to be over to figure out if the pipeline will be faster doing the header step 
 
     ##creates an annotation file for cad (to field damaging variant scores)
     sbatchWritingLong(cadannotation)
     cadannotation.write(
-        "/projects/b1049/pranav5/moad/stratification/CADD-scripts/CADD.sh -g "+build+" -o "+prefix+".tsv.gz "+vcfFile +"\n"
+        "/projects/b1049/pranav5/moad/stratification/CADD-scripts/CADD.sh -g "+build+" -o "+prefix+".tsv.gz forCADD.vcf\n"
         )
 
     #creates an annotation file for annovar (for functional annotation)
     sbatchWritingMid(annovarannotation)
     annovarannotation.write(
         "module load bcftools\n"
-        "bcftools view --no-header "+vcfFile+" > "+ prefix+"_noHeader.vcf.gz \n"
         "\n"
-        "awk '{print $1"'"\t"'"$2"'"\t"'"$2"'"\t"'"$4"'"\t"'"$5}' "+ prefix+"_noHeader.vcf.gz > forAnno.txt\n"
+        "awk '{print $1"'"\t"'"$2"'"\t"'"$2"'"\t"'"$4"'"\t"'"$5}' forCADD.vcf > forAnno.txt\n"
         "\n"
         "perl /projects/b1049/pranav5/moad/stratification/annovar/table_annovar.pl forAnno.txt /projects/b1049/pranav5/moad/stratification/annovar/humandb/ -buildver hg38 -protocol refGene -remove -otherinfo -operation g -out " + prefix+"_annotated\n"
         "\n"
@@ -218,17 +218,18 @@ def allLOFinclusion_pipeline(vcfFile, build, prefix, thresholdsList):
     ##thresholds; filter by cadd thresholds
     n = len(thresholdsList)
     for i in range(n):
-        cadannotation.write("\nawk '{if ($6>"+str(thresholdsList[i])+") print $1"'"_"'"$2"'"_"'"$4"'"_"'"$3}' "+ prefix+".tsv.gz > "+str(thresholdsList[i])+"_CADD.txt\n"
+        cadannotation.write("\nawk '{if ($6>"+str(thresholdsList[i])+") print $1"'"_"'"$2"'"_"'"$3"'"_"'"$4}' "+ prefix+".tsv.gz > "+str(thresholdsList[i])+"_CADD.txt\n"
         )
 
     #creates a wrapper
     cadannotation.close()
     wrapper.write(
-        "jid0=($(sbatch "+prefix+"_cadAnno.sh))\n"
+        "jid0=($(sbatch chromosomeRename.sh))\n"
         "echo "'"jid0 ${jid0[-1]}"'" >> slurm_ids\n"
-        "\n"
-        "jid1=($(sbatch "+prefix+"_annovarAnno.sh))\n"
+        "jid1=($(sbatch --dependency=afterok:${jid0[-1]} "+prefix+"_cadAnno.sh))\n"
         "echo "'"jid1 ${jid1[-1]}"'" >> slurm_ids\n"
+        "jid2=($(sbatch  --dependency=afterok:${jid0[-1]} "+prefix+"_annovarAnno.sh))\n"
+        "echo "'"jid2 ${jid2[-1]}"'" >> slurm_ids\n"
          )
 
     sbatchWritingShort(LOFextraction)
@@ -241,8 +242,8 @@ def allLOFinclusion_pipeline(vcfFile, build, prefix, thresholdsList):
             "\n"  
         )
     wrapper.write(
-            "jid"+str(2)+"=($(sbatch --dependency=afterok:${jid0[-1]} "+prefix+"_LOFs.sh))\n"
-            "echo "'"jid2 ${jid2[-1]}"'" >> slurm_ids\n"
+            "jid"+str(3)+"=($(sbatch --dependency=afterok:${jid1[-1]} "+prefix+"_LOFs.sh))\n"
+            "echo "'"jid3 ${jid3[-1]}"'" >> slurm_ids\n"
         )
 
     for i in range(n):
@@ -262,8 +263,9 @@ def allLOFinclusion_pipeline(vcfFile, build, prefix, thresholdsList):
         script.close()
         
         wrapper.write(
-            "jid"+str(i+3)+"=($(sbatch --dependency=afterok:${jid2[-1]} "+str(thresholdsList[i])+"_filtering.sh))\n"
+            "jid"+str(i+4)+"=($(sbatch --dependency=afterok:${jid3[-1]} "+str(thresholdsList[i])+"_filtering.sh))\n"
         )
+
 
 ##gene burden functions
 
